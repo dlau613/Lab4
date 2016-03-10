@@ -310,9 +310,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'y':
 				// if (strcmp(optarg,"1"))//im lazy for now
-					opt_yield = 1;
-				int j;
-				for (j=0; j< strlen(optarg);j++) {
+				opt_yield = 1;
+				unsigned int j;
+				for (j = 0; j < strlen(optarg); j++) {
 					if (optarg[j] == 'i') {
 						insert_yield = 1;
 					}
@@ -404,8 +404,6 @@ int main(int argc, char *argv[])
 	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2));
 	free(elements_array);
 	free(list);
+
+	return 0;
 }
-
-
-
-

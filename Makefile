@@ -4,22 +4,28 @@ CFLAGS = -g -Wall -Wextra -Wno-unused
 LAB = 4
 DISTDIR = lab4-$(USER)
 
-all: addtest
-
 TESTS = $(wildcard test*.sh)
 TEST_BASES = $(subst .sh,,$(TESTS))
 
-Addtest_SOURCES = \
-	lab4.c
+ADDTEST_SOURCES = lab4.c
+ADDTEST_OBJECTS = $(subst .c,.o,$(ADDTEST_SOURCES))
 
-Addtest_OBJECTS = $(subst .c,.o,$(Addtest_SOURCES))
+SLTEST_SOURCES = sltest2.c
+SLTEST_OBJECTS = $(subst .c,.o,$(SLTEST_SOURCES))
 
 DIST_SOURCES = \
-	$(Addtest_SOURCES) makefile \
-	$(TESTS) README
+	$(ADDTEST_SOURCES) \
+	Makefile \
+	$(TESTS) \
+	README.md
 
-addtest: $(Addtest_OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(Addtest_OBJECTS) -lpthread
+all: addtest sltest
+
+addtest: $(ADDTEST_OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $(ADDTEST_OBJECTS) -lpthread
+
+sltest: $(SLTEST_OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $(SLTEST_OBJECTS) -lpthread
 
 dist: $(DISTDIR).tar.gz
 
@@ -34,6 +40,6 @@ $(TEST_BASES): addtest
 	./$@.sh
 
 clean:
-	rm -fr *.o *~ *.bak *.tar.gz core *.core *.tmp addtest $(DISTDIR)
+	rm -fr *.o *~ *.bak *.tar.gz core *.core *.tmp addtest sltest $(DISTDIR)
 
 .PHONY: all dist check $(TEST_BASES) clean
