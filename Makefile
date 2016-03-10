@@ -1,4 +1,4 @@
-CC = gcc	
+CC ?= gcc	
 CFLAGS = -g -Wall -Wextra -Wno-unused  
 
 LAB = 4
