@@ -38,12 +38,12 @@ struct list_struct {
 typedef struct list_struct list_struct_t; 
 static list_struct_t ** list_array;
 
-//used to pass all the list elements to the threads
-//offset used to calculate which list elements to add to the list
+//offset used to calculate which list elements each thread should add to the list
 struct args_struct {
 	int offset;
-	SortedListElement_t ** pointer;
 };
+
+SortedListElement_t ** elements_array;
 
 
 static char * rand_key(char * str, size_t size) {
@@ -75,7 +75,8 @@ void * wrapper(void * arg) {
 	struct args_struct * args;
 	args = arg;
 	int offset = args->offset;
-	SortedListElement_t ** pointer = args->pointer;
+	// SortedListElement_t ** pointer = args->pointer;
+	SortedListElement_t ** pointer = elements_array;
 	int i;
 
 	//add the list elements 
@@ -109,7 +110,7 @@ void * wrapper(void * arg) {
 	}
 	//get the length
 	int length = SortedList_length(target_list);
-	printf("length: %d\n",length);
+	// printf("length: %d\n",length);
 	for (i = offset; i < offset+iterations;++i) {
 		if (sublists == 0) {
 			target_list = list;
@@ -143,9 +144,23 @@ void * wrapper(void * arg) {
 
 int SortedList_length(SortedList_t *list) {
 	int length = 0;
+	SortedList_t * target_list;
+	pthread_mutex_t *target_lock;
+	volatile int *target_lock_m;
 	if (sublists == 0) {
+		target_list = list;
+		target_lock = &lock;
+		target_lock_m = &lock_m;
+
+		if (sync_m)
+			pthread_mutex_lock(target_lock);
+		if (sync_s)
+			while(__sync_lock_test_and_set(target_lock_m,1));
+
 		SortedListElement_t *n = list->next;
 		while (n != list) {
+			if (opt_yield && search_yield)
+				pthread_yield();
 			SortedListElement_t * next = n->next;
 			SortedListElement_t * prev = n->prev;
 			length++;
@@ -155,13 +170,30 @@ int SortedList_length(SortedList_t *list) {
 				return -1;
 			n = n->next;
 		}
+
+		if (sync_m)
+			pthread_mutex_unlock(target_lock);
+		if (sync_s)	
+			__sync_lock_release(target_lock_m);
+
 	}
 	else {
 		int i;
 		for (i = 0;i < sublists;++i) {
+			target_list = list_array[i]->list;
+			target_lock = &list_array[i]->lock;
+			target_lock_m = &list_array[i]->lock_m;
+
+			if (sync_m)
+				pthread_mutex_lock(target_lock);
+			if (sync_s)
+				while(__sync_lock_test_and_set(target_lock_m,1));
+
 			SortedList_t * l = list_array[i]->list;
 			SortedListElement_t * n = l->next;
 			while (n != l) {
+				if (opt_yield && search_yield)
+					pthread_yield();
 				SortedListElement_t * next = n->next;
 				SortedListElement_t * prev = n->prev;
 				length++;
@@ -171,6 +203,11 @@ int SortedList_length(SortedList_t *list) {
 					return -1;
 				n = n->next;
 			}
+
+			if (sync_m)
+				pthread_mutex_unlock(target_lock);
+			if (sync_s)	
+				__sync_lock_release(target_lock_m);
 		}
 	}
 	return length;
@@ -181,6 +218,8 @@ int SortedList_length(SortedList_t *list) {
 SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 	SortedListElement_t *n = list->next;
 	while (n != list) {
+		if (opt_yield && search_yield) 
+			pthread_yield();
 		if (strcmp(n->key, key) == 0) {
 			return n;
 		}
@@ -276,15 +315,12 @@ int main(int argc, char *argv[])
 				for (j=0; j< strlen(optarg);j++) {
 					if (optarg[j] == 'i') {
 						insert_yield = 1;
-						// printf("i\n");
 					}
 					if (optarg[j] == 'd'){
 						delete_yield = 1;
-						// printf("d\n");
 					}
 					if (optarg[j] == 's'){
 						search_yield = 1;
-						// printf("s\n");
 					}
 				}
 				break;
@@ -323,10 +359,10 @@ int main(int argc, char *argv[])
 	}
 
 	int i;
-	SortedListElement_t ** array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
+	elements_array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
 	for (i = 0; i < threads*iterations;++i) {
-		array[i] = malloc(sizeof(SortedListElement_t));
-		array[i]->key = rand_key_wrapper(10);
+		elements_array[i] = malloc(sizeof(SortedListElement_t));
+		elements_array[i]->key = rand_key_wrapper(10);
 	}
 
 	pthread_t tid[threads];
@@ -335,7 +371,6 @@ int main(int argc, char *argv[])
 
 		for (i=0;i <threads; i++) {
 			struct args_struct *pass = malloc(sizeof(struct args_struct));
-			pass->pointer = array;
 			pass->offset = i*iterations;
 			pthread_create(&tid[i], NULL, wrapper, (void*)pass);
 		}
@@ -350,7 +385,7 @@ int main(int argc, char *argv[])
 
 	int length = SortedList_length(list);
 	for (i=0;i < threads*iterations;++i) {
-		free(array[i]);
+		free(elements_array[i]);
 	}
 
 	char error[10];
@@ -367,7 +402,7 @@ int main(int argc, char *argv[])
 	printf("%sfinal length = %d\n",error, length);
 	printf("elapsed time: %f ns\n",elapsed_time);
 	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2));
-	free(array);
+	free(elements_array);
 	free(list);
 }
 
