@@ -13,20 +13,23 @@
 
 int opt_yield;
 int insert_yield, delete_yield, search_yield;
-static pthread_mutex_t lock;
-volatile static int lock_m;
 static int sync_m; 
 static int sync_s;
 static int iterations;
 static int threads;
+static int sublists;
 
-static SortedList_t *list;
+static SortedList_t * list;
+static pthread_mutex_t lock;
+volatile static int lock_m;
 
 struct list_struct {
 	SortedList_t * list;
 	pthread_mutex_t lock;
 	volatile int lock_m;
 };
+typedef struct list_struct list_struct_t; 
+static list_struct_t ** list_array;
 
 struct args_struct {
 	int offset;
@@ -56,44 +59,105 @@ char * rand_key_wrapper(size_t size) {
 }
 
 void * wrapper(void * arg) {
+	SortedList_t * target_list;
+	pthread_mutex_t *target_lock;
+	volatile int *target_lock_m;
 	struct args_struct * args;
 	args = arg;
 	int offset = args->offset;
 	SortedListElement_t ** pointer = args->pointer;
 	int i;
+
+
 	for(i = offset; i < offset+iterations;++i) {
 		// printf("%s\n",pointer[i]->key);
-		SortedList_insert(list, pointer[i]);
-	}
-	int length = SortedList_length(list);
-	for (i = offset; i < offset+iterations;++i) {
+		if (sublists == 0) {
+			target_list = list;
+			target_lock = &lock;
+			target_lock_m = &lock_m;
+		}
+		else {
+			int hash = atoi(pointer[i]->key) % sublists;
+			target_list = list_array[hash]->list;
+			target_lock = &list_array[hash]->lock;
+			target_lock_m = &list_array[hash]->lock_m;
+		}
 		if (sync_m)
-			pthread_mutex_lock(&lock);
+			pthread_mutex_lock(target_lock);
 		if (sync_s)
-			while(__sync_lock_test_and_set(&lock_m,1));
+			while(__sync_lock_test_and_set(target_lock_m,1));
+		SortedList_insert(target_list, pointer[i]);
+		if (sync_m)
+			pthread_mutex_unlock(target_lock);
+		if (sync_s)	
+			__sync_lock_release(target_lock_m);
+		
+	}
+	
+	int length = SortedList_length(target_list);
+	printf("length: %d\n",length);
+	for (i = offset; i < offset+iterations;++i) {
+		if (sublists == 0) {
+			target_list = list;
+			target_lock = &lock;
+			target_lock_m = &lock_m;
+		}
+		else {
+			int hash = atoi(pointer[i]->key) % sublists;
+			target_list = list_array[hash]->list;
+			target_lock = &list_array[hash]->lock;
+			target_lock_m = &list_array[hash]->lock_m;
+		}
 
-		SortedListElement_t * temp = SortedList_lookup(list, pointer[i]->key);
+		if (sync_m)
+			pthread_mutex_lock(target_lock);
+		if (sync_s)
+			while(__sync_lock_test_and_set(target_lock_m,1));
+
+		SortedListElement_t * temp = SortedList_lookup(target_list, pointer[i]->key);
 		if (temp != NULL)
 			SortedList_delete(temp);
 		
 		if (sync_m)
-			pthread_mutex_unlock(&lock);
+			pthread_mutex_unlock(target_lock);
 		if (sync_s)	
-			__sync_lock_release(&lock_m);
+			__sync_lock_release(target_lock_m);
 	}	
 	return (void*)arg;
 }
 
 int SortedList_length(SortedList_t *list) {
 	int length = 0;
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		// if ()
-		length++;
-		// printf("%s, ",n->key);
-		n = n->next;
+	if (sublists == 0) {
+		SortedListElement_t *n = list->next;
+		while (n != list) {
+			SortedListElement_t * next = n->next;
+			SortedListElement_t * prev = n->prev;
+			length++;
+			if (next->prev != n)
+				return -1;
+			if (prev->next != n)
+				return -1;
+			n = n->next;
+		}
 	}
-	// printf("\n");
+	else {
+		int i;
+		for (i = 0;i < sublists;++i) {
+			SortedList_t * l = list_array[i]->list;
+			SortedListElement_t * n = l->next;
+			while (n != l) {
+				SortedListElement_t * next = n->next;
+				SortedListElement_t * prev = n->prev;
+				length++;
+				if (next->prev != n)
+					return -1;
+				if (prev->next != n)
+					return -1;
+				n = n->next;
+			}
+		}
+	}
 	return length;
 }
 
@@ -111,10 +175,10 @@ SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 }
 void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
 	// pthread_mutex_lock(&lock);
-	if (sync_m)
-		pthread_mutex_lock(&lock);
-	if (sync_s)
-		while(__sync_lock_test_and_set(&lock_m,1));
+	// if (sync_m)
+	// 	pthread_mutex_lock(&lock);
+	// if (sync_s)
+	// 	while(__sync_lock_test_and_set(&lock_m,1));
 	SortedListElement_t *p = list;
 	SortedListElement_t *n = list->next;
 	while (n != list) {
@@ -130,10 +194,10 @@ void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
 	p->next=element;
 	n->prev=element;
 
-	if (sync_m)
-		pthread_mutex_unlock(&lock);
-	if (sync_s)	
-		__sync_lock_release(&lock_m);
+	// if (sync_m)
+	// 	pthread_mutex_unlock(&lock);
+	// if (sync_s)	
+	// 	__sync_lock_release(&lock_m);
 }
 
 int SortedList_delete( SortedListElement_t *element) {
@@ -167,7 +231,7 @@ int SortedList_delete( SortedListElement_t *element) {
 	n->prev = p;
 	p->next = n;
 	element->next = NULL;
-	element->prev=NULL;
+	element->prev = NULL;
 	// if (sync_m)
 	// 	pthread_mutex_unlock(&lock);
 	// if (sync_s)	
@@ -185,31 +249,9 @@ int main(int argc, char *argv[])
 	search_yield = 0;
 	iterations = 1;
 	threads = 1;
+	sublists = 0;
 	srand(time(0));
 	// SortedList_t *list;
-	list = malloc(sizeof(SortedList_t));
-	list->key = NULL;
-	list->prev = list;
-	list->next = list;
-
-	// SortedList_t * list = malloc(sizeof(SortedList_t));
-	// list->key = NULL;
-	// list->prev = list; 
-	// list->next = list;
-	// SortedListElement_t *e = malloc(sizeof(SortedListElement_t));
-	// e->key = "daniel";
-	// SortedList_insert(list,e);
-
-
-	// char * key = rand_key_wrapper(6);
-	// SortedListElement_t *e2 = malloc(sizeof(SortedListElement_t));
-	// e2->key = key;
-	// SortedList_insert(list,e2);
-	// printf("length: %d\n",SortedList_length(list));	 
-	
-	// free(e);
-	// free(e2);
-	// free(list);
 
 	while(1)
 	{
@@ -219,6 +261,7 @@ int main(int argc, char *argv[])
 			{"iterations",required_argument,0,'i'},
 			{"yield", required_argument,0,'y'},
 			{"sync", required_argument,0,'s'},
+			{"lists",required_argument,0,'l'},
 			{0, 0, 0, 0}
 		};
 		int option_index;
@@ -237,6 +280,9 @@ int main(int argc, char *argv[])
 				iterations = atoi(optarg);
 				break;
 
+			case 'l':
+				sublists = atoi(optarg);
+				break;
 			case 'y':
 				// if (strcmp(optarg,"1"))//im lazy for now
 					opt_yield = 1;
@@ -269,11 +315,32 @@ int main(int argc, char *argv[])
 
 		}
 	}
+	if (sublists == 0) {
+		list = malloc(sizeof(SortedList_t));
+		list->key = NULL;
+		list->prev = list;
+		list->next = list;
+	}
+	else {
+		list_array = malloc(sizeof(list_struct_t*)*sublists);
+		int i;
+		for (i = 0; i < sublists;i++) {
+			list_array[i] = malloc(sizeof(list_struct_t));
+			list_array[i]->list = malloc(sizeof(SortedList_t));
+			list_array[i]->list->key = NULL;
+			list_array[i]->list->prev = list_array[i]->list;
+			list_array[i]->list->next = list_array[i]->list;
+		}
+	}
+
+
+
+
 	int i;
 	SortedListElement_t ** array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
 	for (i = 0; i < threads*iterations;++i) {
 		array[i] = malloc(sizeof(SortedListElement_t));
-		array[i]->key = rand_key_wrapper(15);
+		array[i]->key = rand_key_wrapper(10);
 	}
 	// struct args_struct pass;
 	// pass.pointer = array;
@@ -296,12 +363,11 @@ int main(int argc, char *argv[])
 	elapsed_time = ((double)end.tv_sec*pow(10,9) + (double)end.tv_nsec) - 
 					((double)start.tv_sec*pow(10,9) + (double)start.tv_nsec);
 
-	
+	int length = SortedList_length(list);
 	for (i=0;i < threads*iterations;++i) {
 		free(array[i]);
 	}
 
-	int length = SortedList_length(list);
 	char error[10];
 	int exit_status;
 	exit_status = 0;
