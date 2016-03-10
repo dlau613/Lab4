@@ -12,7 +12,7 @@
 static long long counter;
 static int opt_yield;
 static pthread_mutex_t lock;
-volatile static int lock_m;
+static volatile int lock_m;
 static int sync_m; 
 static int sync_s;
 static int sync_c;

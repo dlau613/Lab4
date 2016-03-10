@@ -1,3 +1,5 @@
+/*This file contains a C program that drives threads*/
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,29 +26,29 @@ static int threads;
 static int sublists;
 
 //if no lists option then use a single list and set of locks
-static SortedList_t * list;
+static SortedList_t *list;
 static pthread_mutex_t lock;
-volatile static int lock_m;
+static volatile int lock_m;
 
 //if lists option is declared then make an array of list_structs
 //each list_struct has a list and set of locks
 struct list_struct {
-	SortedList_t * list;
+	SortedList_t *list;
 	pthread_mutex_t lock;
 	volatile int lock_m;
 };
 typedef struct list_struct list_struct_t; 
-static list_struct_t ** list_array;
+static list_struct_t **list_array;
 
 //offset used to calculate which list elements each thread should add to the list
 struct args_struct {
 	int offset;
 };
 
-SortedListElement_t ** elements_array;
+SortedListElement_t **elements_array;
 
 
-static char * rand_key(char * str, size_t size) {
+static char *rand_key(char *str, size_t size) {
 	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	if (size) {
 		--size;
@@ -60,7 +62,7 @@ static char * rand_key(char * str, size_t size) {
 	return str;
 }
 
-char * rand_key_wrapper(size_t size) {
+char *rand_key_wrapper(size_t size) {
 	char *s = malloc(size+1);
 	if (s) {
 		rand_key(s,size);
@@ -68,15 +70,15 @@ char * rand_key_wrapper(size_t size) {
 	return s;
 }
 
-void * wrapper(void * arg) {
-	SortedList_t * target_list;
+void *wrapper(void *arg) {
+	SortedList_t *target_list;
 	pthread_mutex_t *target_lock;
 	volatile int *target_lock_m;
-	struct args_struct * args;
+	struct args_struct *args;
 	args = arg;
 	int offset = args->offset;
-	// SortedListElement_t ** pointer = args->pointer;
-	SortedListElement_t ** pointer = elements_array;
+	// SortedListElement_t **pointer = args->pointer;
+	SortedListElement_t **pointer = elements_array;
 	int i;
 
 	//add the list elements 
@@ -129,7 +131,7 @@ void * wrapper(void * arg) {
 		if (sync_s)
 			while(__sync_lock_test_and_set(target_lock_m,1));
 
-		SortedListElement_t * temp = SortedList_lookup(target_list, pointer[i]->key);
+		SortedListElement_t *temp = SortedList_lookup(target_list, pointer[i]->key);
 		//if lookup found an element with the key in the list then delete it
 		if (temp != NULL)
 			SortedList_delete(temp);
@@ -144,7 +146,7 @@ void * wrapper(void * arg) {
 
 int SortedList_length(SortedList_t *list) {
 	int length = 0;
-	SortedList_t * target_list;
+	SortedList_t *target_list;
 	pthread_mutex_t *target_lock;
 	volatile int *target_lock_m;
 	if (sublists == 0) {
@@ -161,8 +163,8 @@ int SortedList_length(SortedList_t *list) {
 		while (n != list) {
 			if (opt_yield && search_yield)
 				pthread_yield();
-			SortedListElement_t * next = n->next;
-			SortedListElement_t * prev = n->prev;
+			SortedListElement_t *next = n->next;
+			SortedListElement_t *prev = n->prev;
 			length++;
 			if (next->prev != n)
 				return -1;
@@ -189,13 +191,13 @@ int SortedList_length(SortedList_t *list) {
 			if (sync_s)
 				while(__sync_lock_test_and_set(target_lock_m,1));
 
-			SortedList_t * l = list_array[i]->list;
-			SortedListElement_t * n = l->next;
+			SortedList_t *l = list_array[i]->list;
+			SortedListElement_t *n = l->next;
 			while (n != l) {
 				if (opt_yield && search_yield)
 					pthread_yield();
-				SortedListElement_t * next = n->next;
-				SortedListElement_t * prev = n->prev;
+				SortedListElement_t *next = n->next;
+				SortedListElement_t *prev = n->prev;
 				length++;
 				if (next->prev != n)
 					return -1;
@@ -227,7 +229,7 @@ SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 	}
 	return NULL;
 }
-void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
+void SortedList_insert(SortedList_t *list, SortedListElement_t *element) {
 	SortedListElement_t *p = list;
 	SortedListElement_t *n = list->next;
 	while (n != list) {
