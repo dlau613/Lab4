@@ -10,19 +10,26 @@
 
 
 // #define _POSIX_C_SOURCE >= 199309L
-
+//flags
 int opt_yield;
 int insert_yield, delete_yield, search_yield;
 static int sync_m; 
 static int sync_s;
+
 static int iterations;
 static int threads;
+
+//argument to option --lists=#
+//initialized as 0
 static int sublists;
 
+//if no lists option then use a single list and set of locks
 static SortedList_t * list;
 static pthread_mutex_t lock;
 volatile static int lock_m;
 
+//if lists option is declared then make an array of list_structs
+//each list_struct has a list and set of locks
 struct list_struct {
 	SortedList_t * list;
 	pthread_mutex_t lock;
@@ -31,10 +38,13 @@ struct list_struct {
 typedef struct list_struct list_struct_t; 
 static list_struct_t ** list_array;
 
+//used to pass all the list elements to the threads
+//offset used to calculate which list elements to add to the list
 struct args_struct {
 	int offset;
 	SortedListElement_t ** pointer;
 };
+
 
 static char * rand_key(char * str, size_t size) {
 	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -68,32 +78,36 @@ void * wrapper(void * arg) {
 	SortedListElement_t ** pointer = args->pointer;
 	int i;
 
-
+	//add the list elements 
 	for(i = offset; i < offset+iterations;++i) {
-		// printf("%s\n",pointer[i]->key);
 		if (sublists == 0) {
 			target_list = list;
 			target_lock = &lock;
 			target_lock_m = &lock_m;
 		}
 		else {
+			//pick a list_struct by hasing the key of the list element we weant to add
+			//grab the list and locks from the list_struct
 			int hash = atoi(pointer[i]->key) % sublists;
 			target_list = list_array[hash]->list;
 			target_lock = &list_array[hash]->lock;
 			target_lock_m = &list_array[hash]->lock_m;
 		}
+
 		if (sync_m)
 			pthread_mutex_lock(target_lock);
 		if (sync_s)
 			while(__sync_lock_test_and_set(target_lock_m,1));
+
 		SortedList_insert(target_list, pointer[i]);
+
 		if (sync_m)
 			pthread_mutex_unlock(target_lock);
 		if (sync_s)	
 			__sync_lock_release(target_lock_m);
 		
 	}
-	
+	//get the length
 	int length = SortedList_length(target_list);
 	printf("length: %d\n",length);
 	for (i = offset; i < offset+iterations;++i) {
@@ -115,6 +129,7 @@ void * wrapper(void * arg) {
 			while(__sync_lock_test_and_set(target_lock_m,1));
 
 		SortedListElement_t * temp = SortedList_lookup(target_list, pointer[i]->key);
+		//if lookup found an element with the key in the list then delete it
 		if (temp != NULL)
 			SortedList_delete(temp);
 		
@@ -174,11 +189,6 @@ SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 	return NULL;
 }
 void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
-	// pthread_mutex_lock(&lock);
-	// if (sync_m)
-	// 	pthread_mutex_lock(&lock);
-	// if (sync_s)
-	// 	while(__sync_lock_test_and_set(&lock_m,1));
 	SortedListElement_t *p = list;
 	SortedListElement_t *n = list->next;
 	while (n != list) {
@@ -193,50 +203,26 @@ void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
 	element->next=n;
 	p->next=element;
 	n->prev=element;
-
-	// if (sync_m)
-	// 	pthread_mutex_unlock(&lock);
-	// if (sync_s)	
-	// 	__sync_lock_release(&lock_m);
 }
 
 int SortedList_delete( SortedListElement_t *element) {
-	// if (sync_m)
-	// 	pthread_mutex_lock(&lock);
-	// if (sync_s)
-	// 	while(__sync_lock_test_and_set(&lock_m,1));
+
 	SortedListElement_t *n = element->next;
 	SortedListElement_t *p = element->prev;
 	if (n->prev != element){
-		// if (sync_m)
-		// 	pthread_mutex_unlock(&lock);
-		// if (sync_s)	
-		// 	__sync_lock_release(&lock_m);
 		return 1;
 	}
 	if (p->next != element){
-		// if (sync_m)
-		// 	pthread_mutex_unlock(&lock);
-		// if (sync_s)	
-		// 	__sync_lock_release(&lock_m);
 		return 1;
 	}
-	//thread yield
-	// if (sync_m)
-		// pthread_mutex_lock(&lock);
-	// if (sync_s)
-	// 	while(__sync_lock_test_and_set(&lock_m,1));
+
 	if (opt_yield && delete_yield) 
 		pthread_yield();
 	n->prev = p;
 	p->next = n;
 	element->next = NULL;
 	element->prev = NULL;
-	// if (sync_m)
-	// 	pthread_mutex_unlock(&lock);
-	// if (sync_s)	
-	// 	__sync_lock_release(&lock_m);
-	// free(element);
+
 	return 0;
 }
 
@@ -251,7 +237,7 @@ int main(int argc, char *argv[])
 	threads = 1;
 	sublists = 0;
 	srand(time(0));
-	// SortedList_t *list;
+
 
 	while(1)
 	{
@@ -315,6 +301,9 @@ int main(int argc, char *argv[])
 
 		}
 	}
+
+	//either initialize the single lists or an array of list_structs
+	//each list_struct has a list and locks
 	if (sublists == 0) {
 		list = malloc(sizeof(SortedList_t));
 		list->key = NULL;
@@ -333,17 +322,13 @@ int main(int argc, char *argv[])
 		}
 	}
 
-
-
-
 	int i;
 	SortedListElement_t ** array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
 	for (i = 0; i < threads*iterations;++i) {
 		array[i] = malloc(sizeof(SortedListElement_t));
 		array[i]->key = rand_key_wrapper(10);
 	}
-	// struct args_struct pass;
-	// pass.pointer = array;
+
 	pthread_t tid[threads];
 	struct timespec start,end;
 	clock_gettime(CLOCK_REALTIME, &start);
