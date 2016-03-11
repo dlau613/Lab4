@@ -22,10 +22,10 @@ DIST_SOURCES = \
 all: addtest sltest
 
 addtest: $(ADDTEST_OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(ADDTEST_OBJECTS) -lpthread
+	$(CC) $(CFLAGS) -o $@ $(ADDTEST_OBJECTS) -lpthread -lrt
 
 sltest: $(SLTEST_OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(SLTEST_OBJECTS) -lpthread
+	$(CC) $(CFLAGS) -o $@ $(SLTEST_OBJECTS) -lpthread -lrt
 
 dist: $(DISTDIR).tar.gz
 
