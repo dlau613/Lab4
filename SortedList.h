@@ -1,3 +1,8 @@
+#ifndef SORTED_LIST_H
+#define SORTED_LIST_H
+#include <pthread.h>
+
+
 /*
  * SortedList (and SortedListElement)
  *
@@ -87,3 +92,42 @@ extern int opt_yield;
 #define	INSERT_YIELD	0x01	// yield in insert critical section
 #define	DELETE_YIELD	0x02	// yield in delete critical section
 #define	SEARCH_YIELD	0x04	// yield in lookup/length critical section
+
+
+
+//if lists option is declared then make an array of list_structs
+//each list_struct has a list and set of locks
+struct list_struct {
+	SortedList_t *list;
+	pthread_mutex_t lock;
+	volatile int lock_m;
+};
+typedef struct list_struct list_struct_t; 
+
+
+//offset used to calculate which list elements each thread should add to the list
+struct args_struct {
+	int offset;
+};
+
+
+extern int insert_yield, delete_yield, search_yield;
+extern int sync_m; 
+extern int sync_s;
+
+extern int iterations;
+extern int threads;
+
+//argument to option --lists=#
+//initialized as 0
+extern int sublists;
+
+//if no lists option then use a single list and set of locks
+extern SortedList_t *list;
+extern pthread_mutex_t lock;
+extern volatile int lock_m;
+
+extern list_struct_t **list_array;
+extern SortedListElement_t **elements_array;
+
+#endif // SORTED_LIST_H

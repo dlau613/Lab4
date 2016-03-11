@@ -10,41 +10,26 @@
 #include <string.h>
 #include "SortedList.h"
 
-
 // #define _POSIX_C_SOURCE >= 199309L
 //flags
 int opt_yield;
 int insert_yield, delete_yield, search_yield;
-static int sync_m; 
-static int sync_s;
+int sync_m; 
+int sync_s;
 
-static int iterations;
-static int threads;
+int iterations;
+int threads;
 
 //argument to option --lists=#
 //initialized as 0
-static int sublists;
+int sublists;
 
 //if no lists option then use a single list and set of locks
-static SortedList_t *list;
-static pthread_mutex_t lock;
-static volatile int lock_m;
+SortedList_t *list;
+pthread_mutex_t lock;
+volatile int lock_m;
 
-//if lists option is declared then make an array of list_structs
-//each list_struct has a list and set of locks
-struct list_struct {
-	SortedList_t *list;
-	pthread_mutex_t lock;
-	volatile int lock_m;
-};
-typedef struct list_struct list_struct_t; 
-static list_struct_t **list_array;
-
-//offset used to calculate which list elements each thread should add to the list
-struct args_struct {
-	int offset;
-};
-
+list_struct_t **list_array;
 SortedListElement_t **elements_array;
 
 
@@ -78,7 +63,6 @@ void *wrapper(void *arg) {
 	args = arg;
 	int offset = args->offset;
 
-	// SortedListElement_t **pointer = args->pointer;
 	SortedListElement_t **pointer = elements_array;
 	
 	int i;
@@ -144,129 +128,6 @@ void *wrapper(void *arg) {
 			__sync_lock_release(target_lock_m);
 	}	
 	return (void*)arg;
-}
-
-int SortedList_length(SortedList_t *list) {
-	int length = 0;
-	SortedList_t *target_list;
-	pthread_mutex_t *target_lock;
-	volatile int *target_lock_m;
-	if (sublists == 0) {
-		target_list = list;
-		target_lock = &lock;
-		target_lock_m = &lock_m;
-
-		if (sync_m)
-			pthread_mutex_lock(target_lock);
-		if (sync_s)
-			while(__sync_lock_test_and_set(target_lock_m,1));
-
-		SortedListElement_t *n = list->next;
-		while (n != list) {
-			if (opt_yield && search_yield)
-				pthread_yield();
-			SortedListElement_t *next = n->next;
-			SortedListElement_t *prev = n->prev;
-			length++;
-			if (next->prev != n)
-				return -1;
-			if (prev->next != n)
-				return -1;
-			n = n->next;
-		}
-
-		if (sync_m)
-			pthread_mutex_unlock(target_lock);
-		if (sync_s)	
-			__sync_lock_release(target_lock_m);
-
-	}
-	else {
-		int i;
-		for (i = 0;i < sublists;++i) {
-			target_list = list_array[i]->list;
-			target_lock = &list_array[i]->lock;
-			target_lock_m = &list_array[i]->lock_m;
-
-			if (sync_m)
-				pthread_mutex_lock(target_lock);
-			if (sync_s)
-				while(__sync_lock_test_and_set(target_lock_m,1));
-
-			SortedList_t *l = list_array[i]->list;
-			SortedListElement_t *n = l->next;
-			while (n != l) {
-				if (opt_yield && search_yield)
-					pthread_yield();
-				SortedListElement_t *next = n->next;
-				SortedListElement_t *prev = n->prev;
-				length++;
-				if (next->prev != n)
-					return -1;
-				if (prev->next != n)
-					return -1;
-				n = n->next;
-			}
-
-			if (sync_m)
-				pthread_mutex_unlock(target_lock);
-			if (sync_s)	
-				__sync_lock_release(target_lock_m);
-		}
-	}
-	return length;
-}
-
-
-
-SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		if (opt_yield && search_yield) 
-			pthread_yield();
-		if (strcmp(n->key, key) == 0) {
-			return n;
-		}
-		n = n->next;
-	}
-	return NULL;
-}
-void SortedList_insert(SortedList_t *list, SortedListElement_t *element) {
-	SortedListElement_t *p = list;
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		if (strcmp(element->key, n->key) < 0) //keep looping till you find an element greater than it
-			break;
-		n = n->next;
-	}
-	if (opt_yield && insert_yield) 
-		pthread_yield();
-	p=n->prev;
-	element->prev=p;
-	element->next=n;
-	p->next=element;
-	n->prev=element;
-}
-
-int SortedList_delete( SortedListElement_t *element) {
-
-	SortedListElement_t *n = element->next;
-	SortedListElement_t *p = element->prev;
-	if (n->prev != element){
-		return 1;
-	}
-	if (p->next != element){
-		return 1;
-	}
-
-	if (opt_yield && delete_yield) 
-		pthread_yield();
-	n->prev = p;
-	p->next = n;
-	element->next = NULL;
-	element->prev = NULL;
-
-	return 0;
 }
 
 
