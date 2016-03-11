@@ -13,40 +13,40 @@ the average time per operation vs the number of threads for all four versions of
 Run your program for a range of threads and iterations values, and note how many threads and iterations it takes to (fairly consistently) result in a failure (non-zero sum).
 
 **QUESTIONS 1.1:  
-Why does it take this many threads or iterations?  **
+Why does it take this many threads or iterations?**  
 It takes this many thread or iterations because the execution and switching among threads is governed by the scheduler. Therefore, as the number of threads we have increases, the probability of the resulting in a failure should increase as well. This is also the case where increasing the number of iterations increases the probability of resulting in a failure, since there are more chances for the thread switching to occur in the middle of an add operation.
 
-**Why does a significantly smaller number of iterations so seldom fail?  **
+**Why does a significantly smaller number of iterations so seldom fail?**  
 A significantly smaller number of iterations so seldomly fails because there are less opportunities for a thread performing an add operation to be 
 
 
 Graph the average cost per operation (non-yield) as a function of the number of iterations, with a single thread. You should note that the average cost per operation goes down as the number of iterations goes up.
 
 **QUESTIONS 1.2  
-Why does the average cost per operation drop with increasing iterations?  **
+Why does the average cost per operation drop with increasing iterations?**  
 The average cost per opration drops with increasing iteration because the overhead of the scheduler preemptively scheduling another thread (which happens to be the same one, since we are single-threaded) will be more evenly distributed as part of the average cost per operation at large iterations. At lower iterations, the overhead will result in a higher cost per operation since its overhead cost is distributed among fewer threads.
 
-**How do we know what the “correct” cost is?  **
+**How do we know what the “correct” cost is?**  
 The "correct" cost is closer to the cost a higher iterations since we are looking for the cost associated with each add operation, not scheduling. Therefore, we want the scheduling time to be diluted over a larger number of iterations. We can alternatively get the cost per operation without the preemptive scheduling by measuring the user run time, as the scheduling is part of system time.
 
-**Why are the --yield runs so much slower? Where is the extra time going?  **
+**Why are the --yield runs so much slower? Where is the extra time going?**  
 Each time a thread yields, that thread gives up the CPU and is "is placed at the end of the run queue for its static priority and another thread is scheduled to run." (http://man7.org/linux/man-pages/man3/pthread_yield.3.html) This means that for every add() function call, the scheduler is forced to run and pick a thread. However, since in this specific testing case we only have one thread, the scheduler will pick the same thread that yielded and continue operating. This is in contrast to the preemptive scheduling case where the scheduler does not run during every single add() function call. The only difference between the two cases is that the --yield runs must yield in every single operation, so the extra time must be coming from context switching, i.e. yielding to the scheduler to pick another thread.
 
-**Can we get valid timings if we are using --yield? How, or why not?  **
+**Can we get valid timings if we are using --yield? How, or why not?**  
 Yes, we can still get valid timings. Since yielding consumes system time rather than user time, if we want to know the actual cost per operation we can ignore the system time and grab the total user run time instead and divide it among the number of operations for the valid cost per operation.
 
 **CONTINUE EDITING FROM HERE**
 
 **QUESTIONS 1.3  
-Why do all of the options perform similarly for low numbers of threads?  **
+Why do all of the options perform similarly for low numbers of threads?**  
 All of the options (mutex, spin-lock, and compare_and_swap) have approximately equivalent overheads for small nnumbers of threads. In the mutex's case, etc etc. In the spin-lock's case, etc etc. In the compare_and_swap case, etc etc.
 
-**Why do the three protected operations slow down as the number of threads rises?  **
+**Why do the three protected operations slow down as the number of threads rises?**  
 The mutex idk...
 Spin-locks have a larger number of threads that can be selected and be spinning, attempting to acquire the resource. We must return to the original thread that locked the resource to unlock it.
 The compare_and_swap synchronization method has a large number of threads that can interrupt it.
 
-**Why are spin-locks so expensive for large numbers of threads?  **
+**Why are spin-locks so expensive for large numbers of threads?**  
 Spin-locks are so expensive for large numbers of threads because each thread invoked by the scheduler must check if it is allowed access to the resource before it accesses it. This means that if a particular thread has a lock on the resource and yields or is otherwise forced to yield to a different thread, control must return to the original thread for the resource to be unlocked. During that time period, all other threads the scheduler switches to will perform a lock checking instruction, thereby consuming additional CPU time. If the scheduler is not aware, it may even check all other threads before finally returning to the original thread.
 
 ###Part 2 – parallel updates to complex data structures
