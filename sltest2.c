@@ -75,12 +75,11 @@ void * wrapper(void * arg) {
 	struct args_struct * args;
 	args = arg;
 	int offset = args->offset;
-	// SortedListElement_t ** pointer = args->pointer;
 	SortedListElement_t ** pointer = elements_array;
 	int i;
 
 	//add the list elements 
-	for(i = offset; i < offset+iterations;++i) {
+	for(i = offset; i < offset+iterations; ++i) {
 		if (sublists == 0) {
 			target_list = list;
 			target_lock = &lock;
@@ -265,6 +264,7 @@ int SortedList_delete( SortedListElement_t *element) {
 	return 0;
 }
 
+
 int main(int argc, char *argv[]) 
 {
 	sync_m = 0;
@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
 
 	pthread_t tid[threads];
 	struct timespec start,end;
-	clock_gettime(CLOCK_REALTIME, &start);
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
 		for (i=0;i <threads; i++) {
 			struct args_struct *pass = malloc(sizeof(struct args_struct));
@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
 			pthread_join(tid[i],NULL);
 		}
 
-	clock_gettime(CLOCK_REALTIME,&end);
+	clock_gettime(CLOCK_MONOTONIC,&end);
 	double elapsed_time;
 	elapsed_time = ((double)end.tv_sec*pow(10,9) + (double)end.tv_nsec) - 
 					((double)start.tv_sec*pow(10,9) + (double)start.tv_nsec);

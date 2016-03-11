@@ -12,7 +12,7 @@
 static long long counter;
 static int opt_yield;
 static pthread_mutex_t lock;
-volatile static int lock_m;
+static volatile int lock_m;
 static int sync_m; 
 static int sync_s;
 static int sync_c;
@@ -161,7 +161,8 @@ int main(int argc, char *argv[])
 	int i;
 	pthread_t tid[threads];
 	struct timespec start,end;
-	clock_gettime(CLOCK_REALTIME, &start);
+	// clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+	clock_gettime(CLOCK_MONOTONIC, &start);
 	if (sync_m) {
 		for (i=0;i <threads; i++) {
 			pthread_create(&tid[i], NULL, wrapper_sync_m, NULL);
@@ -194,7 +195,8 @@ int main(int argc, char *argv[])
 			pthread_join(tid[i],NULL);
 		}
 	}
-	clock_gettime(CLOCK_REALTIME,&end);
+	// clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&end);
+	clock_gettime(CLOCK_MONOTONIC,&end);
 	double elapsed_time;
 	elapsed_time = ((double)end.tv_sec*pow(10,9) + (double)end.tv_nsec) - 
 					((double)start.tv_sec*pow(10,9) + (double)start.tv_nsec);
