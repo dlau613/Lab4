@@ -3,7 +3,7 @@
 
 ###Part 1 – parallel updates to a shared variable
 State of Deliverables
-Source for a the source for a C program and Makefile that cleanly (no warnings) builds using gcc on an x86-64 GNU/Linux system, implements the (below) specified command line options, drives one or more parallel threads that do adds and subtracts to a shared variable, and reports on the final sum and performance. **source of C program is lab4.c, Makefile is Makefile. Makefile currently does not build cleanly**
+Source for a the source for a C program and Makefile that cleanly (no warnings) builds using gcc on an x86-64 GNU/Linux system, implements the (below) specified command line options, drives one or more parallel threads that do adds and subtracts to a shared variable, and reports on the final sum and performance.
 
 graphs of: 
 the average time per operation vs the number of iterations
@@ -45,11 +45,11 @@ The mutex needs to select between a larger number of threads as the number of th
 **Why are spin-locks so expensive for large numbers of threads?**  
 Spin-locks are so expensive for large numbers of threads because each thread invoked by the scheduler must check if it is allowed access to the resource before it accesses it. This means that if a particular thread has a lock on the resource and yields or is otherwise forced to yield to a different thread, control must return to the original thread for the resource to be unlocked. During that time period, all other threads the scheduler switches to will perform a lock checking instruction, thereby consuming additional CPU time. If the scheduler is not aware, it may even check all other threads before finally returning to the original thread.
 
+
 ###Part 2 – parallel updates to complex data structures
 State of Deliverables
 the source for a C module and Makefile that cleanly (no warnings) builds using gcc on an x86-64 GNU/Linux system, and implements insert, delete, lookup, and length methods for a sorted doubly linked list (described in a provided header file, including correct placement of pthread_yield calls).
 the source for a C program and Makefile that cleanly (no warnings) builds using gcc on an x86-64 GNU/Linux system, implements the (below) specified command line options, drives one or more parallel threads that do operations on a shared linked list, and reports on the final list and performance.
-**currently in sltest.c and sltest2.c, Makefile not implemented. future work: implement in already created Makefile**
 
 graphs of:
 average time per unprotected operation vs number of iteration (single thread)
@@ -74,6 +74,7 @@ The performance of the synchronized methods gets worse as the number of threads 
 
 **Explain why threads per list is a more interesting number than threads (for this particular measurement).**  
 Threads per list is a more interesting number than just threads since we have a number of sublists that we've created. Since we create sublists hopefully to generate a performance boost, it therefore makes sense for us to calculate performance as a function of threads per list rather than just threads. It would not make sense for us to introduce in an additional performance-impacting variable, i.e. # of lists, and not consider it in performance analysis.
+
 
 ###Part 3 – sleep/wakeup races
 State of Deliverables
