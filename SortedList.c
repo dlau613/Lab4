@@ -11,7 +11,7 @@ int SortedList_length(SortedList_t *list) {
 	SortedList_t *target_list;
 	pthread_mutex_t *target_lock;
 	volatile int *target_lock_m;
-	if (sublists == 0) {
+	if (sublists == 1) {
 		target_list = list;
 		target_lock = &lock;
 		target_lock_m = &lock_m;

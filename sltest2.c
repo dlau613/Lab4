@@ -21,7 +21,7 @@ int iterations;
 int threads;
 
 //argument to option --lists=#
-//initialized as 0
+//initialized as 1
 int sublists;
 
 //if no lists option then use a single list and set of locks
@@ -69,10 +69,11 @@ void *wrapper(void *arg) {
 
 	//add the list elements 
 	for(i = offset; i < offset+iterations; ++i) {
-		if (sublists == 0) {
+		if (sublists == 1) {
 			target_list = list;
 			target_lock = &lock;
 			target_lock_m = &lock_m;
+
 		}
 		else {
 			//pick a list_struct by hasing the key of the list element we weant to add
@@ -98,9 +99,8 @@ void *wrapper(void *arg) {
 	}
 	//get the length
 	int length = SortedList_length(target_list);
-	// printf("length: %d\n",length);
 	for (i = offset; i < offset+iterations;++i) {
-		if (sublists == 0) {
+		if (sublists == 1) {
 			target_list = list;
 			target_lock = &lock;
 			target_lock_m = &lock_m;
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 	search_yield = 0;
 	iterations = 1;
 	threads = 1;
-	sublists = 0;
+	sublists = 1;
 	srand(time(0));
 
 
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 
 	//either initialize the single lists or an array of list_structs
 	//each list_struct has a list and locks
-	if (sublists == 0) {
+	if (sublists == 1) {
 		list = malloc(sizeof(SortedList_t));
 		list->key = NULL;
 		list->prev = list;
@@ -264,10 +264,10 @@ int main(int argc, char *argv[])
 	}
 	else 
 		strcpy(error,"");
-	printf("%d threads x %d iterations x (insert + delete) = %d operations\n",threads,iterations,threads*iterations*2);
+	printf("%d threads x %d iterations x (ins +lookup/del) * (iterations/lists)/2 = %d operations\n",threads,iterations,threads*iterations*2*(iterations/sublists)/2);
 	printf("%sfinal length = %d\n",error, length);
 	printf("elapsed time: %f ns\n",elapsed_time);
-	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2));
+	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2*(iterations/sublists)/2));
 	free(elements_array);
 	free(list);
 
