@@ -11,7 +11,6 @@
 #include "SortedList.h"
 
 // #define _POSIX_C_SOURCE >= 199309L
-//flags
 int opt_yield;
 int insert_yield, delete_yield, search_yield;
 int sync_m; 

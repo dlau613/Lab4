@@ -64,13 +64,18 @@ written brief (a few sentences per question) answers to questions 2.1, 2.2 and 2
 
 **QUESTIONS 2.1**  
 Explain the variation in time per operation vs the number of iterations? How would you propose to correct for this effect?
+The number of operations required increases proportionally to the square of the number of iterations. The elapsed time increases but at less than linear rate. Since the elapsed time decreases sublinearly and the number of operations increases by a square of the number of iterations, the time per operation decreases approximately by a square. At very large number of iterations, preemptive scheduling becomes apparent and so the time per operation will plateau.
 
 **QUESTIONS 2.2**  
 Compare the variation in time per protected operation vs the number of threads in Part 2 and in Part 1. Explain the difference.
 
+
 **QUESTIONS 2.3**  
-Explain the the change in performance of the synchronized methods as a function of the number of threads per list.
-Explain why threads per list is a more interesting number than threads (for this particular measurement).
+**Explain the the change in performance of the synchronized methods as a function of the number of threads per list.**  
+The performance of the synchronized methods gets worse as the number of threads per list increases. This is because on average there will be more threads operating on each list, resulting in longer waiting periods for the locked resources, i.e. waiting on permission to modify a list.
+
+**Explain why threads per list is a more interesting number than threads (for this particular measurement).**  
+Threads per list is a more interesting number than just threads since we have a number of sublists that we've created. Since we create sublists hopefully to generate a performance boost, it therefore makes sense for us to calculate performance as a function of threads per list rather than just threads. It would not make sense for us to introduce in an additional performance-impacting variable, i.e. # of lists, and not consider it in performance analysis.
 
 ###Part 3 – sleep/wakeup races
 State of Deliverables

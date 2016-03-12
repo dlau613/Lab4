@@ -1,5 +1,5 @@
-CC ?= gcc	
-CFLAGS = -g -Wall -Wextra -Wno-unused  
+CC ?= gcc 
+CFLAGS = -g -Wall -Wextra -Wno-unused 
 
 LAB = 4
 DISTDIR = lab4-$(USER)
@@ -10,7 +10,7 @@ TEST_BASES = $(subst .sh,,$(TESTS))
 ADDTEST_SOURCES = lab4.c
 ADDTEST_OBJECTS = $(subst .c,.o,$(ADDTEST_SOURCES))
 
-SLTEST_SOURCES = sltest2.c
+SLTEST_SOURCES = SortedList.c sltest2.c
 SLTEST_OBJECTS = $(subst .c,.o,$(SLTEST_SOURCES))
 
 DIST_SOURCES = \
