@@ -7,10 +7,10 @@ DISTDIR = lab4-$(USER)
 TESTS = $(wildcard test*.sh)
 TEST_BASES = $(subst .sh,,$(TESTS))
 
-ADDTEST_SOURCES = lab4.c
+ADDTEST_SOURCES = addtest.c
 ADDTEST_OBJECTS = $(subst .c,.o,$(ADDTEST_SOURCES))
 
-SLTEST_SOURCES = SortedList.c sltest2.c
+SLTEST_SOURCES = SortedList.c sltest.c
 SLTEST_OBJECTS = $(subst .c,.o,$(SLTEST_SOURCES))
 
 DIST_SOURCES = \
@@ -36,7 +36,7 @@ $(DISTDIR).tar.gz: $(DIST_SOURCES)
 
 check: $(TEST_BASES)
 
-$(TEST_BASES): addtest
+$(TEST_BASES): addtest sltest
 	./$@.sh
 
 clean:

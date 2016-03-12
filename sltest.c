@@ -1,3 +1,5 @@
+/*This file contains a C program that drives threads*/
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,32 +10,29 @@
 #include <string.h>
 #include "SortedList.h"
 
-
 // #define _POSIX_C_SOURCE >= 199309L
-
 int opt_yield;
 int insert_yield, delete_yield, search_yield;
-static pthread_mutex_t lock;
-volatile static int lock_m;
-static int sync_m; 
-static int sync_s;
-static int iterations;
-static int threads;
+int sync_m; 
+int sync_s;
 
-static SortedList_t *list;
+int iterations;
+int threads;
 
-struct list_struct {
-	SortedList_t * list;
-	pthread_mutex_t lock;
-	volatile int lock_m;
-};
+//argument to option --lists=#
+//initialized as 1
+int sublists;
 
-struct args_struct {
-	int offset;
-	SortedListElement_t ** pointer;
-};
+//if no lists option then use a single list and set of locks
+SortedList_t *list;
+pthread_mutex_t lock;
+volatile int lock_m;
 
-static char * rand_key(char * str, size_t size) {
+list_struct_t **list_array;
+SortedListElement_t **elements_array;
+
+
+static char *rand_key(char *str, size_t size) {
 	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	if (size) {
 		--size;
@@ -47,7 +46,7 @@ static char * rand_key(char * str, size_t size) {
 	return str;
 }
 
-char * rand_key_wrapper(size_t size) {
+char *rand_key_wrapper(size_t size) {
 	char *s = malloc(size+1);
 	if (s) {
 		rand_key(s,size);
@@ -55,126 +54,81 @@ char * rand_key_wrapper(size_t size) {
 	return s;
 }
 
-void * wrapper(void * arg) {
-	struct args_struct * args;
+void *wrapper(void *arg) {
+	SortedList_t *target_list;
+	pthread_mutex_t *target_lock;
+	volatile int *target_lock_m;
+	struct args_struct *args;
 	args = arg;
 	int offset = args->offset;
-	SortedListElement_t ** pointer = args->pointer;
-	int i;
-	for(i = offset; i < offset+iterations;++i) {
-		// printf("%s\n",pointer[i]->key);
-		SortedList_insert(list, pointer[i]);
-	}
-	int length = SortedList_length(list);
-	for (i = offset; i < offset+iterations;++i) {
-		if (sync_m)
-			pthread_mutex_lock(&lock);
-		if (sync_s)
-			while(__sync_lock_test_and_set(&lock_m,1));
 
-		SortedListElement_t * temp = SortedList_lookup(list, pointer[i]->key);
+	SortedListElement_t **pointer = elements_array;
+	
+	int i;
+
+	//add the list elements 
+	for(i = offset; i < offset+iterations; ++i) {
+		if (sublists == 1) {
+			target_list = list;
+			target_lock = &lock;
+			target_lock_m = &lock_m;
+
+		}
+		else {
+			//pick a list_struct by hasing the key of the list element we weant to add
+			//grab the list and locks from the list_struct
+			int hash = atoi(pointer[i]->key) % sublists;
+			target_list = list_array[hash]->list;
+			target_lock = &list_array[hash]->lock;
+			target_lock_m = &list_array[hash]->lock_m;
+		}
+
+		if (sync_m)
+			pthread_mutex_lock(target_lock);
+		if (sync_s)
+			while(__sync_lock_test_and_set(target_lock_m,1));
+
+		SortedList_insert(target_list, pointer[i]);
+
+		if (sync_m)
+			pthread_mutex_unlock(target_lock);
+		if (sync_s)	
+			__sync_lock_release(target_lock_m);
+		
+	}
+	//get the length
+	int length = SortedList_length(target_list);
+	for (i = offset; i < offset+iterations;++i) {
+		if (sublists == 1) {
+			target_list = list;
+			target_lock = &lock;
+			target_lock_m = &lock_m;
+		}
+		else {
+			int hash = atoi(pointer[i]->key) % sublists;
+			target_list = list_array[hash]->list;
+			target_lock = &list_array[hash]->lock;
+			target_lock_m = &list_array[hash]->lock_m;
+		}
+
+		if (sync_m)
+			pthread_mutex_lock(target_lock);
+		if (sync_s)
+			while(__sync_lock_test_and_set(target_lock_m,1));
+
+		SortedListElement_t *temp = SortedList_lookup(target_list, pointer[i]->key);
+		//if lookup found an element with the key in the list then delete it
 		if (temp != NULL)
 			SortedList_delete(temp);
 		
 		if (sync_m)
-			pthread_mutex_unlock(&lock);
+			pthread_mutex_unlock(target_lock);
 		if (sync_s)	
-			__sync_lock_release(&lock_m);
+			__sync_lock_release(target_lock_m);
 	}	
 	return (void*)arg;
 }
 
-int SortedList_length(SortedList_t *list) {
-	int length = 0;
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		// if ()
-		length++;
-		// printf("%s, ",n->key);
-		n = n->next;
-	}
-	// printf("\n");
-	return length;
-}
-
-
-
-SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		if (strcmp(n->key, key) == 0) {
-			return n;
-		}
-		n = n->next;
-	}
-	return NULL;
-}
-void SortedList_insert(SortedList_t * list, SortedListElement_t * element) {
-	// pthread_mutex_lock(&lock);
-	if (sync_m)
-		pthread_mutex_lock(&lock);
-	if (sync_s)
-		while(__sync_lock_test_and_set(&lock_m,1));
-	SortedListElement_t *p = list;
-	SortedListElement_t *n = list->next;
-	while (n != list) {
-		if (strcmp(element->key, n->key) < 0) //keep looping till you find an element greater than it
-			break;
-		n = n->next;
-	}
-	if (opt_yield && insert_yield) 
-		pthread_yield();
-	p=n->prev;
-	element->prev=p;
-	element->next=n;
-	p->next=element;
-	n->prev=element;
-
-	if (sync_m)
-		pthread_mutex_unlock(&lock);
-	if (sync_s)	
-		__sync_lock_release(&lock_m);
-}
-
-int SortedList_delete( SortedListElement_t *element) {
-	// if (sync_m)
-	// 	pthread_mutex_lock(&lock);
-	// if (sync_s)
-	// 	while(__sync_lock_test_and_set(&lock_m,1));
-	SortedListElement_t *n = element->next;
-	SortedListElement_t *p = element->prev;
-	if (n->prev != element){
-		// if (sync_m)
-		// 	pthread_mutex_unlock(&lock);
-		// if (sync_s)	
-		// 	__sync_lock_release(&lock_m);
-		return 1;
-	}
-	if (p->next != element){
-		// if (sync_m)
-		// 	pthread_mutex_unlock(&lock);
-		// if (sync_s)	
-		// 	__sync_lock_release(&lock_m);
-		return 1;
-	}
-	//thread yield
-	// if (sync_m)
-		// pthread_mutex_lock(&lock);
-	// if (sync_s)
-	// 	while(__sync_lock_test_and_set(&lock_m,1));
-	if (opt_yield && delete_yield) 
-		pthread_yield();
-	n->prev = p;
-	p->next = n;
-	element->next = NULL;
-	element->prev=NULL;
-	// if (sync_m)
-	// 	pthread_mutex_unlock(&lock);
-	// if (sync_s)	
-	// 	__sync_lock_release(&lock_m);
-	// free(element);
-	return 0;
-}
 
 int main(int argc, char *argv[]) 
 {
@@ -185,31 +139,9 @@ int main(int argc, char *argv[])
 	search_yield = 0;
 	iterations = 1;
 	threads = 1;
+	sublists = 1;
 	srand(time(0));
-	// SortedList_t *list;
-	list = malloc(sizeof(SortedList_t));
-	list->key = NULL;
-	list->prev = list;
-	list->next = list;
 
-	// SortedList_t * list = malloc(sizeof(SortedList_t));
-	// list->key = NULL;
-	// list->prev = list; 
-	// list->next = list;
-	// SortedListElement_t *e = malloc(sizeof(SortedListElement_t));
-	// e->key = "daniel";
-	// SortedList_insert(list,e);
-
-
-	// char * key = rand_key_wrapper(6);
-	// SortedListElement_t *e2 = malloc(sizeof(SortedListElement_t));
-	// e2->key = key;
-	// SortedList_insert(list,e2);
-	// printf("length: %d\n",SortedList_length(list));	 
-	
-	// free(e);
-	// free(e2);
-	// free(list);
 
 	while(1)
 	{
@@ -219,6 +151,7 @@ int main(int argc, char *argv[])
 			{"iterations",required_argument,0,'i'},
 			{"yield", required_argument,0,'y'},
 			{"sync", required_argument,0,'s'},
+			{"lists",required_argument,0,'l'},
 			{0, 0, 0, 0}
 		};
 		int option_index;
@@ -237,22 +170,22 @@ int main(int argc, char *argv[])
 				iterations = atoi(optarg);
 				break;
 
+			case 'l':
+				sublists = atoi(optarg);
+				break;
 			case 'y':
 				// if (strcmp(optarg,"1"))//im lazy for now
-					opt_yield = 1;
-				int j;
-				for (j=0; j< strlen(optarg);j++) {
+				opt_yield = 1;
+				unsigned int j;
+				for (j = 0; j < strlen(optarg); j++) {
 					if (optarg[j] == 'i') {
 						insert_yield = 1;
-						// printf("i\n");
 					}
 					if (optarg[j] == 'd'){
 						delete_yield = 1;
-						// printf("d\n");
 					}
 					if (optarg[j] == 's'){
 						search_yield = 1;
-						// printf("s\n");
 					}
 				}
 				break;
@@ -269,21 +202,40 @@ int main(int argc, char *argv[])
 
 		}
 	}
-	int i;
-	SortedListElement_t ** array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
-	for (i = 0; i < threads*iterations;++i) {
-		array[i] = malloc(sizeof(SortedListElement_t));
-		array[i]->key = rand_key_wrapper(15);
+
+	//either initialize the single lists or an array of list_structs
+	//each list_struct has a list and locks
+	if (sublists == 1) {
+		list = malloc(sizeof(SortedList_t));
+		list->key = NULL;
+		list->prev = list;
+		list->next = list;
 	}
-	// struct args_struct pass;
-	// pass.pointer = array;
+	else {
+		list_array = malloc(sizeof(list_struct_t*)*sublists);
+		int i;
+		for (i = 0; i < sublists;i++) {
+			list_array[i] = malloc(sizeof(list_struct_t));
+			list_array[i]->list = malloc(sizeof(SortedList_t));
+			list_array[i]->list->key = NULL;
+			list_array[i]->list->prev = list_array[i]->list;
+			list_array[i]->list->next = list_array[i]->list;
+		}
+	}
+
+	int i;
+	elements_array = malloc(sizeof(SortedListElement_t*)*threads*iterations);
+	for (i = 0; i < threads*iterations;++i) {
+		elements_array[i] = malloc(sizeof(SortedListElement_t));
+		elements_array[i]->key = rand_key_wrapper(10);
+	}
+
 	pthread_t tid[threads];
 	struct timespec start,end;
-	clock_gettime(CLOCK_REALTIME, &start);
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
 		for (i=0;i <threads; i++) {
 			struct args_struct *pass = malloc(sizeof(struct args_struct));
-			pass->pointer = array;
 			pass->offset = i*iterations;
 			pthread_create(&tid[i], NULL, wrapper, (void*)pass);
 		}
@@ -291,17 +243,16 @@ int main(int argc, char *argv[])
 			pthread_join(tid[i],NULL);
 		}
 
-	clock_gettime(CLOCK_REALTIME,&end);
+	clock_gettime(CLOCK_MONOTONIC,&end);
 	double elapsed_time;
 	elapsed_time = ((double)end.tv_sec*pow(10,9) + (double)end.tv_nsec) - 
 					((double)start.tv_sec*pow(10,9) + (double)start.tv_nsec);
 
-	
+	int length = SortedList_length(list);
 	for (i=0;i < threads*iterations;++i) {
-		free(array[i]);
+		free(elements_array[i]);
 	}
 
-	int length = SortedList_length(list);
 	char error[10];
 	int exit_status;
 	exit_status = 0;
@@ -312,10 +263,12 @@ int main(int argc, char *argv[])
 	}
 	else 
 		strcpy(error,"");
-	printf("%d threads x %d iterations x (insert + delete) = %d operations\n",threads,iterations,threads*iterations*2);
+	printf("%d threads x %d iterations x (ins +lookup/del) * (iterations/lists)/2 = %d operations\n",threads,iterations,threads*iterations*2*(iterations/sublists)/2);
 	printf("%sfinal length = %d\n",error, length);
 	printf("elapsed time: %f ns\n",elapsed_time);
-	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2));
-	free(array);
+	printf("per operation: %f ns\n",elapsed_time/(threads*iterations*2*(iterations/sublists)/2));
+	free(elements_array);
 	free(list);
+
+	return 0;
 }
