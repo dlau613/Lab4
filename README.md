@@ -35,8 +35,6 @@ Each time a thread yields, that thread gives up the CPU and is "is placed at the
 **Can we get valid timings if we are using --yield? How, or why not?**  
 Yes, we can still get valid timings. Since yielding consumes system time rather than user time, if we want to know the actual cost per operation we can ignore the system time and grab the total user run time instead and divide it among the number of operations for the valid cost per operation.
 
-**CONTINUE EDITING FROM HERE**
-
 **QUESTIONS 1.3  
 Why do all of the options perform similarly for low numbers of threads?**  
 All of the options (mutex, spin-lock, and compare_and_swap) have approximately equivalent overheads for small numbers of threads. The mutex is already fairly lightweight for any number of threads and the compare_and_swap implementation has a small enough critical section where it can successfully finish the add operation (and for a low number of threads the scheduler may not force it to switch as often). In the spin-lock's case, for low numbers of threads the scheduler has a relatively high probability (relative to a large number of threads) to return to the original thread that set the lock for the critical section.
